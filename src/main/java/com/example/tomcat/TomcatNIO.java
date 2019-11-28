@@ -97,28 +97,39 @@ public class TomcatNIO {
     private final void nioStart(){
         //boos线程
         EventLoopGroup boos = new NioEventLoopGroup();
+        //工作线程
         EventLoopGroup worker = new NioEventLoopGroup();
         try{
+            //主线程
             ServerBootstrap server = new ServerBootstrap();
-            server.group(boos, worker).channel(NioServerSocketChannel.class)
+            //将创建的线程加入到反应堆中
+            server.group(boos, worker)
+                    //主线程处理类
+                    .channel(NioServerSocketChannel.class)
                     .childHandler(new ChannelInitializer<SocketChannel>() {
+                        // 客户端初始化处理
                         @Override
                         protected void initChannel(SocketChannel ch) throws Exception {
+                            // 无锁化串行编程
+                            //Netty对HTTP协议的封装，顺序有要求
+                            // HttpResponseEncoder 编码器
                             ch.pipeline().addLast(new HttpResponseEncoder());
+                            //解码器
                             ch.pipeline().addLast(new HttpRequestDecoder());
+                            //自定义的逻辑处理
                             ch.pipeline().addLast(new TomcatHandler());
                         }
                     })
+                    //设置主线程最大为128
                     .option(ChannelOption.SO_BACKLOG, 128)
+                    //子线程保持长连接
                     .childOption(ChannelOption.SO_KEEPALIVE, true)
-                    .bind(port)
-                    .sync()
-                    .channel()
-                    .closeFuture()
-                    .sync();
+                    //绑定端口号
+                    .bind(port).sync().channel().closeFuture().sync();
         }catch (Exception e){
             e.printStackTrace();
         }finally {
+            //关闭线程池
             boos.shutdownGracefully();
             worker.shutdownGracefully();
         }
